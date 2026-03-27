@@ -105,6 +105,24 @@
 
     .go-chat:hover { background: rgba(255,255,255,0.2); }
 
+    .logout-btn {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 12px;
+      background: rgba(239,68,68,0.15);
+      border: 1px solid rgba(239,68,68,0.3);
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 12px;
+      color: #fca5a5;
+      transition: all 0.2s;
+      width: 100%;
+      margin-top: 8px;
+    }
+
+    .logout-btn:hover { background: rgba(239,68,68,0.25); }
+
     /* ===== 主内容 ===== */
     .main {
       margin-left: 220px;
@@ -555,9 +573,14 @@
     </div>
   </nav>
   <div class="sidebar-footer">
-    <a href="/" class="go-chat">
+    <div style="font-size:12px;color:rgba(255,255,255,0.4);margin-bottom:6px">当前登录</div>
+    <div style="font-size:13px;color:rgba(255,255,255,0.85);font-weight:500" id="adminName">管理员</div>
+    <a href="/" class="go-chat" style="margin-top:10px">
       <span>💬</span><span>进入客服聊天</span>
     </a>
+    <button class="logout-btn" onclick="handleLogout()">
+      <span>🚪</span><span>退出登录</span>
+    </button>
   </div>
 </div>
 
@@ -717,6 +740,45 @@
 </div>
 
 <script>
+  // ===== 鉴权检查：未登录则跳转到登录页 =====
+  (async function checkAuth() {
+    try {
+      const resp = await fetch('/api/auth/me');
+      const data = await resp.json();
+      if (data.success && data.admin) {
+        document.getElementById('adminName').textContent = data.admin.name || data.admin.username;
+      } else {
+        location.href = '/login?from=/admin';
+      }
+    } catch (e) {
+      location.href = '/login?from=/admin';
+    }
+  })();
+
+  // ===== 退出登录 =====
+  async function handleLogout() {
+    if (!confirm('确定要退出登录吗？')) return;
+    try {
+      await fetch('/api/auth/logout', { method: 'POST' });
+    } catch (e) {}
+    location.href = '/login';
+  }
+
+  // ===== 所有 admin API 请求统一处理 401 =====
+  const _origFetch = window.fetch;
+  window.fetch = async function(...args) {
+    const resp = await _origFetch(...args);
+    if (resp.status === 401) {
+      const clone = resp.clone();
+      const data = await clone.json().catch(() => ({}));
+      if (data.redirect) {
+        location.href = data.redirect + '?from=/admin';
+        return resp;
+      }
+    }
+    return resp;
+  };
+
   let trendChart = null;
   let todayChart = null;
   let currentPage = 1;
