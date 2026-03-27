@@ -5,6 +5,7 @@
 
 const fs = require('fs');
 const path = require('path');
+const { encryptMessage, decryptMessage, decryptMessages } = require('./crypto');
 
 const DATA_DIR = path.join(__dirname, '../data');
 const DB_FILE = path.join(DATA_DIR, 'database.json');
@@ -174,17 +175,23 @@ function createConversation(sessionId, userId, userAgent) {
   return db.conversations[sessionId];
 }
 
-// 获取会话
+// 获取会话（消息解密后返回）
 function getConversation(sessionId) {
-  return db.conversations[sessionId] || null;
+  const conv = db.conversations[sessionId];
+  if (!conv) return null;
+  // 深拷贝并解密消息，不修改内存中的加密原文
+  return {
+    ...conv,
+    messages: decryptMessages(conv.messages)
+  };
 }
 
-// 添加消息
+// 添加消息（写入前对 content 加密）
 function addMessage(sessionId, role, content, metadata = {}) {
   const conv = db.conversations[sessionId];
   if (!conv) return null;
 
-  const msg = {
+  const plainMsg = {
     id: 'msg_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6),
     role,        // user | bot | system | agent
     content,
@@ -192,9 +199,13 @@ function addMessage(sessionId, role, content, metadata = {}) {
     ...metadata
   };
 
-  conv.messages.push(msg);
+  // 持久化加密版本
+  const encryptedMsg = encryptMessage(plainMsg);
+  conv.messages.push(encryptedMsg);
   saveData(db);
-  return msg;
+
+  // 返回明文版本（供本次响应使用）
+  return plainMsg;
 }
 
 // 更新会话状态
@@ -246,6 +257,7 @@ function listConversations(page = 1, limit = 20, filters = {}) {
   const start = (page - 1) * limit;
   const items = list.slice(start, start + limit).map(c => ({
     ...c,
+    messages: decryptMessages(c.messages),
     messageCount: c.messages.length
   }));
 

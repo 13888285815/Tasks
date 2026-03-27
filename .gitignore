@@ -1,5 +1,8 @@
 node_modules/
-data/database.json
+data/
 .DS_Store
 *.log
 .env
+.env.local
+.env.production
+npm-debug.log*
